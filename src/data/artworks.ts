@@ -40,52 +40,16 @@ const SMALLEST = 0.35; // sunset
 
 export const artworks: Artwork[] = [
   {
-    id: 'italy',
-    title: 'The Bluff',
-    src: '/art/italy.webp',
-    aspectRatio: 0.725,
+    id: 'scream',
+    title: 'Spl it',
+    src: '/art/scream.webp',
+    aspectRatio: 0.7711,
     wallSide: 'left',
-    position: [-WALL_X, HANG_Y, -2],
+    position: [-WALL_X, HANG_Y, -13],
     rotationY: LEFT_ROTATION_Y,
     viewingOffset: 1.3,
     blurb: 'Acrylic on canvas',   // ← add this line
-    ...sized(0.725, BIG),
-  },
-  {
-    id: 'snake',
-    title: 'Medusa',
-    src: '/art/snake.webp',
-    aspectRatio: 0.755,
-    wallSide: 'right',
-    position: [WALL_X, HANG_Y, -2],
-    rotationY: RIGHT_ROTATION_Y,
-    viewingOffset: 1.1,
-    blurb: 'Largely done with pen & marker, some paint.',   // ← add this line
-    ...sized(0.755, MEDIUM),
-  },
-  {
-    id: 'flower',
-    title: 'Bloom I',
-    src: '/art/flower.webp',
-    aspectRatio: 0.8069,
-    wallSide: 'left',
-    position: [-WALL_X, HANG_Y, -4.2],
-    rotationY: LEFT_ROTATION_Y,
-    viewingOffset: 0.95,
-    blurb: 'Paint & marker on wood, 1/2',   // ← add this line
-    ...sized(0.8069, SMALL),
-  },
-  {
-    id: 'womanbaby',
-    title: 'Carry',
-    src: '/art/womanbaby.webp',
-    aspectRatio: 0.8303,
-    wallSide: 'right',
-    position: [WALL_X, HANG_Y, -4.2],
-    rotationY: RIGHT_ROTATION_Y,
-    viewingOffset: 1.3,
-    blurb: 'Acrylic on canvas, displayed in Oakville artshow',   // ← add this line
-    ...sized(0.8303, BIG),
+    ...sized(0.7711, BIG),
   },
   {
     id: 'curler',
@@ -99,6 +63,58 @@ export const artworks: Artwork[] = [
     blurb: 'Acrylic on canvas',   // ← add this line
     ...sized(0.755, MEDIUM),
   },
+  {
+    id: 'italy',
+    title: 'The Bluff',
+    src: '/art/italy.webp',
+    aspectRatio: 0.725,
+    wallSide: 'left',
+    position: [-WALL_X, HANG_Y, -2],
+    rotationY: LEFT_ROTATION_Y,
+    viewingOffset: 1.3,
+    blurb: 'Acrylic on canvas',   // ← add this line
+    ...sized(0.725, BIG),
+  },
+  {
+    id: 'skull',
+    title: 'In the end',
+    src: '/art/skull.webp',
+    aspectRatio: 0.7859,
+    wallSide: 'right',
+    position: [WALL_X, HANG_Y, -13],
+    rotationY: RIGHT_ROTATION_Y,
+    viewingOffset: 1.1,
+    blurb: 'Graphite on paper',
+    ...sized(0.7859, MEDIUM),
+  },
+  
+  {
+    id: 'womanbaby',
+    title: 'Carry',
+    src: '/art/womanbaby.webp',
+    aspectRatio: 0.8303,
+    wallSide: 'right',
+    position: [WALL_X, HANG_Y, -4.2],
+    rotationY: RIGHT_ROTATION_Y,
+    viewingOffset: 1.3,
+    blurb: 'Acrylic on canvas, displayed in Oakville artshow',   // ← add this line
+    ...sized(0.8303, BIG),
+  },
+  {
+    id: 'snake',
+    title: 'Medusa',
+    src: '/art/snake.webp',
+    aspectRatio: 0.755,
+    wallSide: 'right',
+    position: [WALL_X, HANG_Y, -2],
+    rotationY: RIGHT_ROTATION_Y,
+    viewingOffset: 1.1,
+    blurb: 'Largely done with pen & marker, some paint.',   // ← add this line
+    ...sized(0.755, MEDIUM),
+  },
+  
+  
+  
   {
     id: 'sunset',
     title: 'Dusk',
@@ -124,18 +140,6 @@ export const artworks: Artwork[] = [
     ...sized(0.7412, BIG),
   },
   {
-    id: 'flower2',
-    title: 'Bloom II',
-    src: '/art/flower2.webp',
-    aspectRatio: 0.8006,
-    wallSide: 'right',
-    position: [WALL_X, HANG_Y, -8.6],
-    rotationY: RIGHT_ROTATION_Y,
-    viewingOffset: 0.95,
-    blurb: 'Paint & marker on wood, 2/2',   // ← add this line
-    ...sized(0.8006, SMALL),
-  },
-  {
     id: 'hands',
     title: 'Never',
     src: '/art/hands.webp',
@@ -159,30 +163,8 @@ export const artworks: Artwork[] = [
     blurb: 'Myriad of mediums on canvas',   // ← add this line
     ...sized(0.8281, MEDIUM),
   },
-  {
-    id: 'scream',
-    title: 'Spl it',
-    src: '/art/scream.webp',
-    aspectRatio: 0.7711,
-    wallSide: 'left',
-    position: [-WALL_X, HANG_Y, -13],
-    rotationY: LEFT_ROTATION_Y,
-    viewingOffset: 1.3,
-    blurb: 'Acrylic on canvas',   // ← add this line
-    ...sized(0.7711, BIG),
-  },
-  {
-    id: 'skull',
-    title: 'In the end',
-    src: '/art/skull.webp',
-    aspectRatio: 0.7859,
-    wallSide: 'right',
-    position: [WALL_X, HANG_Y, -13],
-    rotationY: RIGHT_ROTATION_Y,
-    viewingOffset: 1.1,
-    blurb: 'Graphite on paper',
-    ...sized(0.7859, MEDIUM),
-  },
+  
+  
   {
     id: 'newpiece',
     title: 'Cloth',
@@ -194,7 +176,32 @@ export const artworks: Artwork[] = [
     viewingOffset: 1.1,         // how far back the camera stands to view it
     blurb: 'Charcoal',
     ...sized(1.5330, BIG),      // pick BIG/MEDIUM/SMALL/SMALLEST from the constants above, or a new number (longest edge in meters)
-  }
+  },
+  {
+    id: 'flower',
+    title: 'Bloom I',
+    src: '/art/flower.webp',
+    aspectRatio: 0.8069,
+    wallSide: 'left',
+    position: [-WALL_X, HANG_Y, -4.2],
+    rotationY: LEFT_ROTATION_Y,
+    viewingOffset: 0.95,
+    blurb: 'Paint & marker on wood, 1/2',   // ← add this line
+    ...sized(0.8069, SMALL),
+  },
+  {
+    id: 'flower2',
+    title: 'Bloom II',
+    src: '/art/flower2.webp',
+    aspectRatio: 0.8006,
+    wallSide: 'right',
+    position: [WALL_X, HANG_Y, -8.6],
+    rotationY: RIGHT_ROTATION_Y,
+    viewingOffset: 0.95,
+    blurb: 'Paint & marker on wood, 2/2',   // ← add this line
+    ...sized(0.8006, SMALL),
+  },
+  
 ];
 
 export const artworkById = new Map(artworks.map((a) => [a.id, a]));

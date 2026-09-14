@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useSceneStore } from '../store/useSceneStore';
 import { waypointById } from '../data/waypoints';
+import { getBookReadingPose } from '../data/sketchbook';
 import { clamp, damp, easeInOutCubic } from '../lib/easing';
 
 const MAX_YAW = THREE.MathUtils.degToRad(50);
@@ -13,6 +14,7 @@ const LOOK_DAMP_LAMBDA = 10;
 const BASE_MOVE_DURATION = 1.2;
 const MOVE_DURATION_PER_METER = 0.12;
 const MAX_MOVE_DURATION = 2.4;
+const BOOK_FOCUS_DURATION = 0.9;
 
 function dirToYawPitch(dir: THREE.Vector3): { yaw: number; pitch: number } {
   const pitch = Math.asin(clamp(dir.y, -1, 1));
@@ -30,16 +32,13 @@ export default function CameraRig() {
 
   const cameraMode = useSceneStore((s) => s.cameraMode);
   const activeWaypointId = useSceneStore((s) => s.activeWaypointId);
-  const previousWaypointId = useSceneStore((s) => s.previousWaypointId);
-  const arrivedAtWaypoint = useSceneStore((s) => s.arrivedAtWaypoint);
+  const moveTarget = useSceneStore((s) => s.moveTarget);
+  const bookState = useSceneStore((s) => s.bookState);
 
-  // Base look direction (no drag offset) per current waypoint, in yaw/pitch.
   const baseYawPitch = useRef({ yaw: 0, pitch: 0 });
-  // Drag-look offsets, clamped, damped toward their drag target.
   const dragTarget = useRef({ yaw: 0, pitch: 0 });
   const dragCurrent = useRef({ yaw: 0, pitch: 0 });
 
-  // MOVING-state tween bookkeeping.
   const move = useRef<{
     startPos: THREE.Vector3;
     startLook: THREE.Vector3;
@@ -49,40 +48,77 @@ export default function CameraRig() {
     duration: number;
   } | null>(null);
 
+  // Second click on the book (CLOSED -> OPENING) tips the camera down into
+  // a closer "reading" pose, independent of the MOVING/moveTarget tween
+  // above (which only fires on the first-click approach to the podium) —
+  // cameraMode stays VIEWING_BOOK throughout so the overlay never unmounts.
+  const bookFocus = useRef<{
+    startPos: THREE.Vector3;
+    startLook: THREE.Vector3;
+    targetPos: THREE.Vector3;
+    targetLook: THREE.Vector3;
+    elapsed: number;
+    duration: number;
+  } | null>(null);
+  const prevBookState = useRef(bookState);
+
   const isDragging = useRef(false);
   const dragStart = useRef({ x: 0, y: 0, yaw: 0, pitch: 0 });
 
-  // Kick off a MOVING tween whenever we enter that mode for a new waypoint.
+  // Kick off a MOVING tween whenever the store hands us a fresh target pose.
+  // This single mechanism drives hallway walking, painting approach/return,
+  // and the hallway->bedroom door transition (ARCHITECTURE.md §4/§11).
+  // Deliberately a plain useEffect (runs on mount too, not just later
+  // changes) — the earlier store.subscribe()-based version never fired for
+  // the very first frame's setup, which left the camera looking nowhere.
   useEffect(() => {
-    if (cameraMode !== 'MOVING') return;
-    const from = previousWaypointId ? waypointById.get(previousWaypointId) : null;
-    const to = waypointById.get(activeWaypointId);
-    if (!to) return;
+    if (cameraMode !== 'MOVING' || !moveTarget) return;
 
     const startPos = camera.position.clone();
     const forward = new THREE.Vector3();
     camera.getWorldDirection(forward);
     const startLook = startPos.clone().add(forward.multiplyScalar(5));
 
-    const targetPos = new THREE.Vector3(...to.position);
-    const targetLook = new THREE.Vector3(...to.lookAt);
-
-    const distance = from
-      ? new THREE.Vector3(...from.position).distanceTo(targetPos)
-      : startPos.distanceTo(targetPos);
-    const duration = Math.min(
-      MAX_MOVE_DURATION,
-      BASE_MOVE_DURATION + distance * MOVE_DURATION_PER_METER,
-    );
+    const targetPos = new THREE.Vector3(...moveTarget.position);
+    const targetLook = new THREE.Vector3(...moveTarget.lookAt);
+    const distance = startPos.distanceTo(targetPos);
+    const reduced = useSceneStore.getState().reducedMotion;
+    const duration = reduced
+      ? 0.35
+      : Math.min(MAX_MOVE_DURATION, BASE_MOVE_DURATION + distance * MOVE_DURATION_PER_METER);
 
     move.current = { startPos, startLook, targetPos, targetLook, elapsed: 0, duration };
-    // Reset drag-look offsets: the new waypoint has its own base look direction.
     dragTarget.current = { yaw: 0, pitch: 0 };
     dragCurrent.current = { yaw: 0, pitch: 0 };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraMode, activeWaypointId]);
+  }, [cameraMode, moveTarget]);
 
-  // Recompute base look direction whenever we settle on a waypoint.
+  // Fires once per book visit, exactly on the CLOSED -> OPENING edge (the
+  // second click) — not on OPENING -> OPEN so it doesn't retrigger, and not
+  // gated on cameraMode alone since VIEWING_BOOK also covers the moment the
+  // approach tween above just finished with the book still closed.
+  useEffect(() => {
+    const prev = prevBookState.current;
+    prevBookState.current = bookState;
+    if (cameraMode !== 'VIEWING_BOOK' || prev !== 'CLOSED' || bookState !== 'OPENING') return;
+
+    const startPos = camera.position.clone();
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    const startLook = startPos.clone().add(forward.multiplyScalar(5));
+
+    const readingPose = getBookReadingPose();
+    const targetPos = new THREE.Vector3(...readingPose.position);
+    const targetLook = new THREE.Vector3(...readingPose.lookAt);
+    const reduced = useSceneStore.getState().reducedMotion;
+    const duration = reduced ? 0.35 : BOOK_FOCUS_DURATION;
+
+    bookFocus.current = { startPos, startLook, targetPos, targetLook, elapsed: 0, duration };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookState, cameraMode]);
+
+  // Recompute base look direction whenever we settle into IDLE (including
+  // on mount, since the entrance waypoint is IDLE from the start).
   useEffect(() => {
     if (cameraMode !== 'IDLE') return;
     const wp = waypointById.get(activeWaypointId);
@@ -135,9 +171,9 @@ export default function CameraRig() {
   }, [gl]);
 
   useFrame((_, delta) => {
-    const mode = useSceneStore.getState().cameraMode;
+    const state = useSceneStore.getState();
 
-    if (mode === 'MOVING' && move.current) {
+    if (state.cameraMode === 'MOVING' && move.current) {
       const m = move.current;
       m.elapsed += delta;
       const t = clamp(m.elapsed / m.duration, 0, 1);
@@ -151,13 +187,13 @@ export default function CameraRig() {
         camera.position.copy(m.targetPos);
         camera.lookAt(m.targetLook);
         move.current = null;
-        arrivedAtWaypoint(activeWaypointId);
+        state.arrivedAtTarget();
       }
       return;
     }
 
-    if (mode === 'IDLE') {
-      const wp = waypointById.get(activeWaypointId);
+    if (state.cameraMode === 'IDLE') {
+      const wp = waypointById.get(state.activeWaypointId);
       if (!wp) return;
       const targetPos = new THREE.Vector3(...wp.position);
       camera.position.set(
@@ -185,8 +221,27 @@ export default function CameraRig() {
       camera.lookAt(camera.position.clone().add(dir));
     }
 
-    // VIEWING_PAINTING and DOOR_TRANSITION are implemented in later milestones
-    // (M4 and M8/M11 respectively) — intentionally a no-op here for now.
+    if (state.cameraMode === 'VIEWING_BOOK' && bookFocus.current) {
+      const bf = bookFocus.current;
+      bf.elapsed += delta;
+      const t = clamp(bf.elapsed / bf.duration, 0, 1);
+      const eased = easeInOutCubic(t);
+
+      camera.position.lerpVectors(bf.startPos, bf.targetPos, eased);
+      const lookPoint = new THREE.Vector3().lerpVectors(bf.startLook, bf.targetLook, eased);
+      camera.lookAt(lookPoint);
+
+      if (t >= 1) {
+        camera.position.copy(bf.targetPos);
+        camera.lookAt(bf.targetLook);
+        bookFocus.current = null;
+      }
+      return;
+    }
+
+    // VIEWING_PAINTING, and VIEWING_BOOK once settled: camera is already
+    // parked exactly at the viewing pose from the tween above — nothing to
+    // do per-frame.
   });
 
   return null;

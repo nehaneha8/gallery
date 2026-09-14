@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "process-art": "node scripts/process-art.mjs"
+    "process-art": "node scripts/process-art.mjs",
+    "process-graffiti": "node scripts/process-graffiti.mjs",
+    "process-textures": "node scripts/process-textures.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.4",

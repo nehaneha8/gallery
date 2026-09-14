@@ -55,7 +55,7 @@ export default function MinimalUI() {
           border: 'none',
           color: 'rgba(247, 246, 245, 0.55)',
           fontFamily: 'Georgia, serif',
-          fontSize: 20,
+          fontSize: 16,
           letterSpacing: 0.4,
           cursor: 'pointer',
           textDecoration: 'underline',

@@ -14,11 +14,11 @@ export default function FloorGlowPoint({ waypoint }: { waypoint: Waypoint }) {
   const haloMesh = useRef<THREE.Mesh>(null);
 
   useFrame((state) => {
-    const pulse = 0.6 + Math.sin(state.clock.elapsedTime * 1.6 + waypoint.position[2]) * 0.25;
-    if (coreMat.current) coreMat.current.opacity = 0.45 * pulse;
-    if (haloMat.current) haloMat.current.opacity = 0.22 * pulse;
+    const pulse = 0.65 + Math.sin(state.clock.elapsedTime * 1.6 + waypoint.position[2]) * 0.35;
+    if (coreMat.current) coreMat.current.opacity = 0.6 * pulse;
+    if (haloMat.current) haloMat.current.opacity = 0.32 * pulse;
     if (haloMesh.current) {
-      const s = 1 + Math.sin(state.clock.elapsedTime * 1.6 + waypoint.position[2]) * 0.08;
+      const s = 1 + Math.sin(state.clock.elapsedTime * 1.6 + waypoint.position[2]) * 0.16;
       haloMesh.current.scale.set(s, s, s);
     }
   });
@@ -47,25 +47,25 @@ export default function FloorGlowPoint({ waypoint }: { waypoint: Waypoint }) {
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.16, 0.16]} />
+        <planeGeometry args={[0.2, 0.2]} />
         <meshBasicMaterial
           ref={coreMat}
           map={glowTex}
           color="#ffcf8a"
           transparent
-          opacity={0.45}
+          opacity={0.6}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
       </mesh>
       <mesh ref={haloMesh} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]}>
-        <planeGeometry args={[0.34, 0.34]} />
+        <planeGeometry args={[0.42, 0.42]} />
         <meshBasicMaterial
           ref={haloMat}
           map={glowTex}
           color="#ffb066"
           transparent
-          opacity={0.22}
+          opacity={0.32}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />

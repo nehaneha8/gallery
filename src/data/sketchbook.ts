@@ -14,12 +14,12 @@ export interface SketchPage {
 // arrows have something to flip between while you test. Replace this array
 // with your real sketch photos whenever you're ready — see the note above.
 export const sketchPages: SketchPage[] = [
-  { src: '/art/flower.webp' },
-  { src: '/art/flower2.webp' },
-  { src: '/art/sunset.webp' },
-  { src: '/art/snake.webp' },
   { src: '/art/suits.webp' },
   { src: '/art/gm.webp' },
+  { src: '/art/dragon.webp' },
+  { src: '/art/Archie.webp' },
+  { src: '/art/backpack.webp' },
+  { src: '/art/pressure.webp' },
 ];
 
 export interface Spread {

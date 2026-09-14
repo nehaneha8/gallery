@@ -29,7 +29,16 @@ const COVER_THICKNESS = 0.015;
 const OPEN_ANGLE = Math.PI * 0.56;
 const OPEN_DURATION = 1.3;
 const FLIP_DURATION = 0.85;
-const FLIP_BEND = 0.045;
+// A curled (non-zero) leaf bulges at its center while its edges stay
+// flat — different parts of the same leaf then face different directions
+// at once, so front-face/back-face culling can show BOTH sides in
+// different regions of the same leaf simultaneously mid-turn (the bulge
+// flips to the incoming image before the flatter edges do). From the
+// steep bird's-eye reading angle that reads as the page visibly splitting
+// down the middle and briefly showing the old page next to the new one.
+// Kept flat (0) to rule that out structurally — a flat plane's normal is
+// uniform, so it can never expose both faces at once.
+const FLIP_BEND = 0;
 const FLIP_SEGMENTS = 10;
 const PAGE_WIDTH = BOOK_HALF_WIDTH * 0.94;
 const PAGE_HEIGHT = BOOK_DEPTH * 0.9;
@@ -43,12 +52,27 @@ function easeInOutQuad(t: number) {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
 
+// "Contain" fit — sketches aren't all the same shape as the page slot (a
+// landscape photo like a horizontal sketch vs. the portrait-ish
+// PAGE_WIDTH x PAGE_HEIGHT box), so stretching every image to exactly fill
+// the slot squashed anything that didn't already match its aspect ratio.
+// This sizes the plane down within the box instead, on whichever axis the
+// image doesn't need, preserving its real proportions.
+function containSize(imageWidth: number, imageHeight: number, boxWidth: number, boxHeight: number) {
+  const imageAspect = imageWidth / imageHeight;
+  const boxAspect = boxWidth / boxHeight;
+  return imageAspect > boxAspect
+    ? { width: boxWidth, height: boxWidth / imageAspect }
+    : { width: boxHeight * imageAspect, height: boxHeight };
+}
+
 function PageImage({ x, src }: { x: number; src: string }) {
   const texture = useTexture(src);
   texture.colorSpace = THREE.SRGBColorSpace;
+  const { width, height } = containSize(texture.image.width, texture.image.height, PAGE_WIDTH, PAGE_HEIGHT);
   return (
     <mesh position={[x, PAGE_Y, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[PAGE_WIDTH, PAGE_HEIGHT]} />
+      <planeGeometry args={[width, height]} />
       <meshStandardMaterial map={texture} roughness={0.95} />
     </mesh>
   );
@@ -74,31 +98,87 @@ function PageFace({ side, src }: { side: 'left' | 'right'; src: string | null })
   return src ? <PageImage x={x} src={src} /> : <BlankPage x={x} />;
 }
 
-function FlipPageMaterial({ src, side }: { src: string; side: THREE.Side }) {
-  const texture = useTexture(src);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return <meshStandardMaterial map={texture} roughness={0.95} side={side} />;
+// Shared by every flip-face geometry below (whatever its own size ends up
+// being, from its own contain-fit) so the paper-curl bend always reads the
+// same regardless of a given image's proportions.
+function bendGeometry(geometry: THREE.BufferGeometry, halfSpan: number, progress: number) {
+  const posAttr = geometry.attributes.position;
+  const bendScale = Math.sin(progress * Math.PI) * FLIP_BEND;
+  for (let i = 0; i < posAttr.count; i++) {
+    const gx = posAttr.getX(i);
+    const t = THREE.MathUtils.clamp((gx + halfSpan) / (2 * halfSpan), 0, 1);
+    posAttr.setZ(i, Math.sin(t * Math.PI) * bendScale);
+  }
+  posAttr.needsUpdate = true;
+  geometry.computeVertexNormals();
 }
 
-function FlipPageBlankMaterial({ side }: { side: THREE.Side }) {
-  return <meshStandardMaterial color="#e8dcc0" roughness={1} side={side} />;
+// Back faces need their U flipped: viewing the *reverse* of a plane
+// through the same UV mapping used on its front always mirrors whatever
+// texture is on it, so without this a back face would show its image
+// mirrored left-right.
+function buildFlipGeometry(width: number, height: number, side: THREE.Side) {
+  const geometry = new THREE.PlaneGeometry(width, height, FLIP_SEGMENTS, 1);
+  if (side === THREE.BackSide) {
+    const uv = geometry.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i));
+  }
+  return geometry;
+}
+
+// One image-bearing face of the turning leaf. Sized via the same
+// contain-fit as the resting PageImage (not the fixed PAGE_WIDTH x
+// PAGE_HEIGHT box) so a page doesn't visibly "pop" from stretched-while-
+// turning to correctly-proportioned the instant it settles. Front and back
+// get independently-sized geometries (rather than sharing one, as before)
+// since the outgoing and incoming images can have different aspect ratios.
+function FlipFace({
+  src,
+  side,
+  progressRef,
+}: {
+  src: string;
+  side: THREE.Side;
+  progressRef: { current: number };
+}) {
+  const texture = useTexture(src);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const { width, height } = containSize(texture.image.width, texture.image.height, PAGE_WIDTH, PAGE_HEIGHT);
+  const halfSpan = width / 2;
+
+  const geometry = useMemo(() => buildFlipGeometry(width, height, side), [width, height, side]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useFrame(() => bendGeometry(geometry, halfSpan, progressRef.current));
+
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial map={texture} roughness={0.95} side={side} />
+    </mesh>
+  );
+}
+
+function FlipFaceBlank({ side, progressRef }: { side: THREE.Side; progressRef: { current: number } }) {
+  const halfSpan = PAGE_WIDTH / 2;
+  const geometry = useMemo(() => buildFlipGeometry(PAGE_WIDTH, PAGE_HEIGHT, side), [side]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useFrame(() => bendGeometry(geometry, halfSpan, progressRef.current));
+
+  return (
+    <mesh geometry={geometry}>
+      <meshStandardMaterial color="#e8dcc0" roughness={1} side={side} />
+    </mesh>
+  );
 }
 
 // The animated turning page: hinged at the spine (x=0), rotates around Z
-// like the cover, and bends slightly (displacing along the geometry's own
-// Z, which maps to world "up" once laid flat) so it reads as paper curling
-// rather than a rigid flat card swinging over.
-//
-// Front and back are two separate meshes — one showing the page that's
-// leaving (outgoingSrc, visible for the first half of the turn), one
-// showing the actual destination page (incomingSrc, revealed once the
-// leaf rotates past vertical) — rather than one DoubleSide mesh. They
-// share a position/normal buffer (so the bend loop below updates both at
-// once) but each gets its own UV attribute, with the back one's U
-// flipped: viewing the *reverse* of a plane through the same UV mapping
-// used on its front always mirrors whatever texture is on it, so a plain
-// DoubleSide mesh could only ever show the outgoing image mirrored on the
-// back — never the real incoming page unmirrored.
+// like the cover, and (via FlipFace above) bends slightly so it reads as
+// paper curling rather than a rigid flat card swinging over. Front and
+// back are separate meshes — one showing the page that's leaving
+// (outgoingSrc, visible for the first half of the turn), one showing the
+// actual destination page (incomingSrc, revealed once the leaf rotates
+// past vertical) — rather than one DoubleSide mesh, which could only ever
+// show the outgoing image mirrored on the back, never the real incoming
+// page unmirrored.
 function FlipPage({
   direction,
   outgoingSrc,
@@ -113,43 +193,7 @@ function FlipPage({
   const pivotRef = useRef<THREE.Group>(null);
   const progressRef = useRef(0);
   const firedRef = useRef(false);
-  const halfSpan = PAGE_WIDTH / 2;
   const meshOffsetX = direction === 'next' ? BOOK_HALF_WIDTH / 2 : -BOOK_HALF_WIDTH / 2;
-
-  const { frontGeometry, backGeometry } = useMemo(() => {
-    const base = new THREE.PlaneGeometry(PAGE_WIDTH, PAGE_HEIGHT, FLIP_SEGMENTS, 1);
-    const position = base.getAttribute('position');
-    const normal = base.getAttribute('normal');
-    const index = base.getIndex();
-    const uv = base.getAttribute('uv') as THREE.BufferAttribute;
-
-    const flippedUv = uv.clone();
-    for (let i = 0; i < flippedUv.count; i++) {
-      flippedUv.setX(i, 1 - flippedUv.getX(i));
-    }
-
-    const front = new THREE.BufferGeometry();
-    front.setAttribute('position', position);
-    front.setAttribute('normal', normal);
-    front.setAttribute('uv', uv);
-    if (index) front.setIndex(index);
-
-    const back = new THREE.BufferGeometry();
-    back.setAttribute('position', position); // shared — bending below updates both
-    back.setAttribute('normal', normal);
-    back.setAttribute('uv', flippedUv);
-    if (index) back.setIndex(index);
-
-    return { frontGeometry: front, backGeometry: back };
-  }, []);
-
-  useEffect(
-    () => () => {
-      frontGeometry.dispose();
-      backGeometry.dispose();
-    },
-    [frontGeometry, backGeometry],
-  );
 
   useFrame((_, delta) => {
     if (firedRef.current) return;
@@ -157,17 +201,6 @@ function FlipPage({
     const p = progressRef.current;
     const angle = (direction === 'next' ? 1 : -1) * Math.PI * easeInOutQuad(p);
     if (pivotRef.current) pivotRef.current.rotation.z = angle;
-
-    const posAttr = frontGeometry.attributes.position; // shared with backGeometry
-    const bendScale = Math.sin(p * Math.PI) * FLIP_BEND;
-    for (let i = 0; i < posAttr.count; i++) {
-      const gx = posAttr.getX(i);
-      const t = THREE.MathUtils.clamp((gx + halfSpan) / (2 * halfSpan), 0, 1);
-      posAttr.setZ(i, Math.sin(t * Math.PI) * bendScale);
-    }
-    posAttr.needsUpdate = true;
-    frontGeometry.computeVertexNormals();
-    backGeometry.computeVertexNormals();
 
     if (p >= 1) {
       // r3f's render loop can tick again before React commits the store
@@ -182,21 +215,67 @@ function FlipPage({
   return (
     <group ref={pivotRef} position={[0, TOP_Y + PAGE_THICKNESS + 0.004, 0]}>
       <group position={[meshOffsetX, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <mesh geometry={frontGeometry}>
-          {outgoingSrc ? (
-            <FlipPageMaterial src={outgoingSrc} side={THREE.FrontSide} />
-          ) : (
-            <FlipPageBlankMaterial side={THREE.FrontSide} />
-          )}
-        </mesh>
-        <mesh geometry={backGeometry}>
-          {incomingSrc ? (
-            <FlipPageMaterial src={incomingSrc} side={THREE.BackSide} />
-          ) : (
-            <FlipPageBlankMaterial side={THREE.BackSide} />
-          )}
-        </mesh>
+        {outgoingSrc ? (
+          <FlipFace src={outgoingSrc} side={THREE.FrontSide} progressRef={progressRef} />
+        ) : (
+          <FlipFaceBlank side={THREE.FrontSide} progressRef={progressRef} />
+        )}
+        {incomingSrc ? (
+          <FlipFace src={incomingSrc} side={THREE.BackSide} progressRef={progressRef} />
+        ) : (
+          <FlipFaceBlank side={THREE.BackSide} progressRef={progressRef} />
+        )}
       </group>
+    </group>
+  );
+}
+
+// Faint light pool on the floor around the podium's base, same additive
+// glow-sprite technique as the hallway's floor waypoint markers (see
+// FloorGlowPoint.tsx) but dimmer and slower — a quiet ambient accent
+// marking the book's spot, not a clickable "walk here" cue.
+function PodiumGlow() {
+  const glowTex = useTexture('/textures/glow.webp');
+  const coreMat = useRef<THREE.MeshBasicMaterial>(null);
+  const haloMat = useRef<THREE.MeshBasicMaterial>(null);
+  const haloMesh = useRef<THREE.Mesh>(null);
+
+  useFrame((state) => {
+    const pulse = 0.55 + Math.sin(state.clock.elapsedTime * 1.1) * 0.3;
+    if (coreMat.current) coreMat.current.opacity = 0.22 * pulse;
+    if (haloMat.current) haloMat.current.opacity = 0.12 * pulse;
+    if (haloMesh.current) {
+      const s = 1 + Math.sin(state.clock.elapsedTime * 1.1) * 0.1;
+      haloMesh.current.scale.set(s, s, s);
+    }
+  });
+
+  return (
+    <group position={[0, 0.012, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.7, 0.7]} />
+        <meshBasicMaterial
+          ref={coreMat}
+          map={glowTex}
+          color="#ffcf8a"
+          transparent
+          opacity={0.22}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh ref={haloMesh} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]}>
+        <planeGeometry args={[1.1, 1.1]} />
+        <meshBasicMaterial
+          ref={haloMat}
+          map={glowTex}
+          color="#ffb066"
+          transparent
+          opacity={0.12}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </mesh>
     </group>
   );
 }
@@ -267,6 +346,8 @@ export default function Podium() {
         document.body.style.cursor = 'auto';
       }}
     >
+      <PodiumGlow />
+
       {/* Rustic pedestal: tapered post + wide reading surface */}
       <mesh position={[0, PEDESTAL_HEIGHT / 2, 0]}>
         <cylinderGeometry args={[0.1, 0.16, PEDESTAL_HEIGHT, 10]} />

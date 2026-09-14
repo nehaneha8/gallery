@@ -109,31 +109,6 @@ function SideTable({ position, rotationY = 0 }: { position: [number, number, num
   );
 }
 
-// A small decorative filler portrait — generic, not part of the curated
-// artwork collection, just wall dressing between the real pieces.
-function SmallPortrait({
-  position,
-  rotationY,
-  color,
-}: {
-  position: [number, number, number];
-  rotationY: number;
-  color: string;
-}) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <mesh position={[0, 0, -0.015]}>
-        <boxGeometry args={[0.34, 0.44, 0.04]} />
-        <meshStandardMaterial color="#241811" roughness={0.7} />
-      </mesh>
-      <mesh position={[0, 0, 0.006]}>
-        <planeGeometry args={[0.26, 0.36]} />
-        <meshStandardMaterial color={color} roughness={0.9} />
-      </mesh>
-    </group>
-  );
-}
-
 function PendantLight({ z }: { z: number }) {
   return (
     <group position={[0, HALL_HEIGHT, z]}>
@@ -187,10 +162,6 @@ export default function HallwayDecor() {
       <SideTable position={[1.13, 0, -13.4]} rotationY={-Math.PI / 2} />
       <PendantLight z={-4.2} />
       <PendantLight z={-11.8} />
-
-      <SmallPortrait position={[HALL_HALF_WIDTH - 0.01, 1.7, -3.3]} rotationY={-Math.PI / 2} color="#7a5a3c" />
-      <SmallPortrait position={[-HALL_HALF_WIDTH + 0.01, 1.7, -9.7]} rotationY={Math.PI / 2} color="#4c5a3a" />
-      <SmallPortrait position={[HALL_HALF_WIDTH - 0.01, 1.7, -15.9]} rotationY={-Math.PI / 2} color="#6a3c3c" />
 
       <HangingVine position={[-HALL_HALF_WIDTH + 0.02, 2.55, -6]} rotationY={Math.PI / 2} length={0.8} />
       <HangingVine position={[HALL_HALF_WIDTH - 0.02, 2.55, -11.5]} rotationY={-Math.PI / 2} length={0.65} />

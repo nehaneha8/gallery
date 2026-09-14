@@ -3,8 +3,9 @@ import { useProgress } from '@react-three/drei';
 import { GLOW_TEXT_STYLE } from './glowText';
 
 const FADE_SECONDS = 1;
-const HOLD_SECONDS = 0.3;
+const HOLD_SECONDS = 0.7;
 const TITLE_TEXT = "Welcome to Neha's Gallery";
+const HINT_TEXT = 'scroll around, click paintings, click floor, click wherever you want';
 
 // One-shot fade in / hold / fade out, gated on drei's shared load-progress
 // store rather than firing on mount — starting the moment the scene assets
@@ -53,8 +54,10 @@ export default function TitleCard() {
         inset: 0,
         zIndex: 35,
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 14,
         pointerEvents: 'none',
       }}
     >
@@ -69,6 +72,21 @@ export default function TitleCard() {
         }}
       >
         {TITLE_TEXT}
+      </div>
+      <div
+        style={{
+          ...GLOW_TEXT_STYLE,
+          fontWeight: 400,
+          fontSize: 'clamp(11px, 1.4vw, 14px)',
+          letterSpacing: '1px',
+          textShadow: '0 0 6px rgba(255,255,255,0.8), 0 0 14px rgba(255,255,255,0.4)',
+          textAlign: 'center',
+          padding: '0 24px',
+          opacity: visible ? 1 : 0,
+          transition: `opacity ${FADE_SECONDS}s ease-in-out`,
+        }}
+      >
+        {HINT_TEXT}
       </div>
     </div>
   );

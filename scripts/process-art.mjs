@@ -28,6 +28,11 @@ const ARTWORKS = [
   { id: 'curtain', file: 'curtain.jpg' },
   { id: 'suits', file: 'suits.jpg' },
   { id: 'gm', file: 'gm.jpg' },
+  { id: 'dragon', file: 'dragon.JPG' },
+  { id: 'Archie', file: 'Archie.jpg' },
+  { id: 'backpack', file: 'backpack.jpg' },
+  { id: 'pressure', file: 'pressure.jpg' },
+
 ];
 
 await mkdir(OUT_DIR, { recursive: true });

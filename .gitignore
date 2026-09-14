@@ -3,3 +3,9 @@ dist
 .DS_Store
 *.local
 *.tsbuildinfo
+
+# Raw source photos — only needed locally to (re)generate public/art via
+# scripts/process-art.mjs etc; the app itself only loads the processed
+# .webp files already tracked under public/. Kept out of git so pushes
+# don't have to carry the full-res originals.
+my_art

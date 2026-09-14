@@ -53,7 +53,7 @@ export default function MinimalUI() {
           zIndex: 15,
           background: 'transparent',
           border: 'none',
-          color: 'rgba(247, 246, 245, 0.55)',
+          color: 'rgba(247, 246, 245, 0.9)',
           fontFamily: 'Georgia, serif',
           fontSize: 16,
           letterSpacing: 0.4,

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useProgress } from '@react-three/drei';
+import { GLOW_TEXT_STYLE } from './glowText';
 
-const FADE_SECONDS = 3;
-const HOLD_SECONDS = 1;
+const FADE_SECONDS = 1;
+const HOLD_SECONDS = 0.3;
 const TITLE_TEXT = "Welcome to Neha's Gallery";
 
 // One-shot fade in / hold / fade out, gated on drei's shared load-progress
@@ -59,15 +60,10 @@ export default function TitleCard() {
     >
       <div
         style={{
-          fontFamily: '"Cinzel Decorative", Georgia, serif',
-          fontWeight: 700,
+          ...GLOW_TEXT_STYLE,
           fontSize: 'clamp(24px, 4.2vw, 42px)',
-          letterSpacing: '3px',
           textAlign: 'center',
           padding: '0 24px',
-          color: '#ffffff',
-          textShadow:
-            '0 0 10px rgba(255,255,255,0.9), 0 0 26px rgba(255,255,255,0.6), 0 0 54px rgba(255,205,150,0.35)',
           opacity: visible ? 1 : 0,
           transition: `opacity ${FADE_SECONDS}s ease-in-out`,
         }}

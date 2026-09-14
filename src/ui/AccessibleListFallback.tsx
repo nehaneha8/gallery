@@ -95,11 +95,11 @@ export default function AccessibleListFallback({ forced }: { forced: boolean }) 
       }}
     >
       <div style={{ maxWidth: 640, margin: '0 auto' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 400, marginBottom: 4 }}>the hallway — artwork</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 400, marginBottom: 4 }}>All of it</h1>
         <p style={{ opacity: 0.7, fontSize: 14, marginBottom: 28 }}>
           {forced
             ? 'Your browser or device can’t run the 3D version, so here’s the collection as a plain list.'
-            : 'A plain list of everything on display in the 3D hallway.'}
+            : 'List of all my art, click to expand.'}
         </p>
         {!forced && (
           <button

@@ -36,6 +36,54 @@ const backLinkStyle: CSSProperties = {
   fontFamily: 'inherit',
 };
 
+// Not rendered yet — swap PlaceholderSections back in for ExperiencePage's
+// body once there's real content, in place of the "not ready" notice below.
+function PlaceholderSections() {
+  return (
+    <div
+      style={{
+        maxWidth: 640,
+        margin: '0 auto',
+        padding: '120px 24px 160px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 96,
+      }}
+    >
+      <h1
+        style={{
+          fontSize: 'clamp(28px, 4vw, 40px)',
+          fontWeight: 300,
+          letterSpacing: '1px',
+          margin: 0,
+        }}
+      >
+        My Experience
+      </h1>
+
+      {SECTIONS.map((section) => (
+        <section key={section.id} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2
+            style={{
+              fontSize: 20,
+              fontWeight: 500,
+              letterSpacing: '0.5px',
+              margin: 0,
+              paddingBottom: 8,
+              borderBottom: '1px solid #2a2a2a',
+            }}
+          >
+            {section.title}
+          </h2>
+          <p style={{ fontSize: 15, lineHeight: 1.6, color: '#9a9a9a', margin: 0 }}>
+            {section.blurb}
+          </p>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export default function ExperiencePage() {
   return (
     <div
@@ -44,53 +92,18 @@ export default function ExperiencePage() {
         background: '#0b0b0b',
         color: '#f2f2f2',
         fontFamily: 'system-ui, -apple-system, sans-serif',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
       <button style={backLinkStyle} onClick={() => navigate('/')}>
         ← back
       </button>
 
-      <div
-        style={{
-          maxWidth: 640,
-          margin: '0 auto',
-          padding: '120px 24px 160px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 96,
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 'clamp(28px, 4vw, 40px)',
-            fontWeight: 300,
-            letterSpacing: '1px',
-            margin: 0,
-          }}
-        >
-          My Experience
-        </h1>
-
-        {SECTIONS.map((section) => (
-          <section key={section.id} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <h2
-              style={{
-                fontSize: 20,
-                fontWeight: 500,
-                letterSpacing: '0.5px',
-                margin: 0,
-                paddingBottom: 8,
-                borderBottom: '1px solid #2a2a2a',
-              }}
-            >
-              {section.title}
-            </h2>
-            <p style={{ fontSize: 15, lineHeight: 1.6, color: '#9a9a9a', margin: 0 }}>
-              {section.blurb}
-            </p>
-          </section>
-        ))}
-      </div>
+      <p style={{ fontSize: 11, color: '#ffffff', letterSpacing: '0.5px', margin: 0 }}>
+        Oops... not ready yet...
+      </p>
     </div>
   );
 }

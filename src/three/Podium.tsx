@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
@@ -29,16 +29,14 @@ const COVER_THICKNESS = 0.015;
 const OPEN_ANGLE = Math.PI * 0.56;
 const OPEN_DURATION = 1.3;
 const FLIP_DURATION = 0.85;
-// A curled (non-zero) leaf bulges at its center while its edges stay
-// flat — different parts of the same leaf then face different directions
-// at once, so front-face/back-face culling can show BOTH sides in
-// different regions of the same leaf simultaneously mid-turn (the bulge
-// flips to the incoming image before the flatter edges do). From the
-// steep bird's-eye reading angle that reads as the page visibly splitting
-// down the middle and briefly showing the old page next to the new one.
-// Kept flat (0) to rule that out structurally — a flat plane's normal is
-// uniform, so it can never expose both faces at once.
-const FLIP_BEND = 0;
+// Bulges the leaf toward its center while its edges stay flat, so it
+// reads as paper curling rather than a rigid card swinging over. See
+// bendGeometry for why the bulge is resolved into world space (rather than
+// just displaced along the mesh's own local axis) and FlipPage for why
+// which face is showing is switched explicitly at the flip's temporal
+// midpoint rather than left to FrontSide/BackSide culling — both were
+// needed to stop the outgoing page from reappearing mid-turn.
+const FLIP_BEND = 0.04;
 const FLIP_SEGMENTS = 10;
 const PAGE_WIDTH = BOOK_HALF_WIDTH * 0.94;
 const PAGE_HEIGHT = BOOK_DEPTH * 0.9;
@@ -101,28 +99,58 @@ function PageFace({ side, src }: { side: 'left' | 'right'; src: string | null })
 // Shared by every flip-face geometry below (whatever its own size ends up
 // being, from its own contain-fit) so the paper-curl bend always reads the
 // same regardless of a given image's proportions.
-function bendGeometry(geometry: THREE.BufferGeometry, halfSpan: number, progress: number) {
+//
+// The bulge is applied in WORLD space (split into local X/Z components
+// using the leaf's current hinge angle — see buildFlipGeometry's baseX
+// comment for why), not along the mesh's own fixed local Z axis: the leaf
+// itself rotates a full 180° about the spine over the course of a turn, so
+// a bulge that's fixed in the mesh's local frame rotates right along with
+// it — pointing up for the first half but swinging down into the table
+// for the second half. This book's resting pages sit only ~0.002 units
+// above the turning leaf's base height, far less than FLIP_BEND (0.04), so
+// that downward swing drove the leaf's curled middle visibly below the
+// page surface, letting the (still old, un-swapped) static page underneath
+// win the depth test and show through — the old sketch "glitching onto"
+// the turning page around the midpoint of the turn. Resolving the bulge
+// into (sin(angle), cos(angle)) instead keeps it pointing straight up in
+// world space for the leaf's entire rotation, so it never dips back down
+// through the table no matter how far the page has turned.
+function bendGeometry(geometry: THREE.BufferGeometry, halfSpan: number, progress: number, angle: number) {
   const posAttr = geometry.attributes.position;
+  const baseX = geometry.userData.baseX as Float32Array;
   const bendScale = Math.sin(progress * Math.PI) * FLIP_BEND;
+  const sinA = Math.sin(angle);
+  const cosA = Math.cos(angle);
   for (let i = 0; i < posAttr.count; i++) {
-    const gx = posAttr.getX(i);
+    const gx = baseX[i];
     const t = THREE.MathUtils.clamp((gx + halfSpan) / (2 * halfSpan), 0, 1);
-    posAttr.setZ(i, Math.sin(t * Math.PI) * bendScale);
+    const bulge = Math.sin(t * Math.PI) * bendScale;
+    posAttr.setX(i, gx + bulge * sinA);
+    posAttr.setZ(i, bulge * cosA);
   }
   posAttr.needsUpdate = true;
   geometry.computeVertexNormals();
 }
 
-// Back faces need their U flipped: viewing the *reverse* of a plane
-// through the same UV mapping used on its front always mirrors whatever
-// texture is on it, so without this a back face would show its image
-// mirrored left-right.
-function buildFlipGeometry(width: number, height: number, side: THREE.Side) {
+// The "incoming" face needs its U flipped: viewing the *reverse* of a
+// plane through the same UV mapping used on its front always mirrors
+// whatever texture is on it, so without this the incoming page would show
+// mirrored left-right once revealed.
+//
+// baseX caches each vertex's original (unbent) X so bendGeometry can
+// recompute the bulge from scratch every frame instead of compounding it
+// onto whatever X the previous frame already wrote — needed now that the
+// bulge has an X component too, not just Z.
+function buildFlipGeometry(width: number, height: number, flipUV: boolean) {
   const geometry = new THREE.PlaneGeometry(width, height, FLIP_SEGMENTS, 1);
-  if (side === THREE.BackSide) {
+  if (flipUV) {
     const uv = geometry.getAttribute('uv') as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setX(i, 1 - uv.getX(i));
   }
+  const posAttr = geometry.attributes.position;
+  const baseX = new Float32Array(posAttr.count);
+  for (let i = 0; i < posAttr.count; i++) baseX[i] = posAttr.getX(i);
+  geometry.userData.baseX = baseX;
   return geometry;
 }
 
@@ -132,40 +160,62 @@ function buildFlipGeometry(width: number, height: number, side: THREE.Side) {
 // turning to correctly-proportioned the instant it settles. Front and back
 // get independently-sized geometries (rather than sharing one, as before)
 // since the outgoing and incoming images can have different aspect ratios.
+//
+// Rendered DoubleSide and toggled on/off from the outside (via the parent
+// group's `visible`) rather than relying on FrontSide/BackSide material
+// culling to decide when it shows: a bent (curved) leaf has its normal
+// pointing in a *range* of directions across its surface, not one uniform
+// direction, so at some rotation angles part of the leaf's surface would
+// cross the FrontSide/BackSide visibility threshold before the rest of
+// it — briefly showing this face and the other face in different regions
+// of the same leaf at once (the previous sketch flashing in the middle of
+// the page mid-turn). Explicit visibility, switched once at the flip's
+// temporal midpoint (see FlipPage), guarantees only one face's texture is
+// ever on screen, independent of how much the leaf is curved.
 function FlipFace({
   src,
-  side,
+  flipUV,
   progressRef,
+  angleRef,
 }: {
   src: string;
-  side: THREE.Side;
+  flipUV: boolean;
   progressRef: { current: number };
+  angleRef: { current: number };
 }) {
   const texture = useTexture(src);
   texture.colorSpace = THREE.SRGBColorSpace;
   const { width, height } = containSize(texture.image.width, texture.image.height, PAGE_WIDTH, PAGE_HEIGHT);
   const halfSpan = width / 2;
 
-  const geometry = useMemo(() => buildFlipGeometry(width, height, side), [width, height, side]);
+  const geometry = useMemo(() => buildFlipGeometry(width, height, flipUV), [width, height, flipUV]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  useFrame(() => bendGeometry(geometry, halfSpan, progressRef.current));
+  useFrame(() => bendGeometry(geometry, halfSpan, progressRef.current, angleRef.current));
 
   return (
     <mesh geometry={geometry}>
-      <meshStandardMaterial map={texture} roughness={0.95} side={side} />
+      <meshStandardMaterial map={texture} roughness={0.95} side={THREE.DoubleSide} />
     </mesh>
   );
 }
 
-function FlipFaceBlank({ side, progressRef }: { side: THREE.Side; progressRef: { current: number } }) {
+function FlipFaceBlank({
+  flipUV,
+  progressRef,
+  angleRef,
+}: {
+  flipUV: boolean;
+  progressRef: { current: number };
+  angleRef: { current: number };
+}) {
   const halfSpan = PAGE_WIDTH / 2;
-  const geometry = useMemo(() => buildFlipGeometry(PAGE_WIDTH, PAGE_HEIGHT, side), [side]);
+  const geometry = useMemo(() => buildFlipGeometry(PAGE_WIDTH, PAGE_HEIGHT, flipUV), [flipUV]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  useFrame(() => bendGeometry(geometry, halfSpan, progressRef.current));
+  useFrame(() => bendGeometry(geometry, halfSpan, progressRef.current, angleRef.current));
 
   return (
     <mesh geometry={geometry}>
-      <meshStandardMaterial color="#e8dcc0" roughness={1} side={side} />
+      <meshStandardMaterial color="#e8dcc0" roughness={1} side={THREE.DoubleSide} />
     </mesh>
   );
 }
@@ -176,9 +226,12 @@ function FlipFaceBlank({ side, progressRef }: { side: THREE.Side; progressRef: {
 // back are separate meshes — one showing the page that's leaving
 // (outgoingSrc, visible for the first half of the turn), one showing the
 // actual destination page (incomingSrc, revealed once the leaf rotates
-// past vertical) — rather than one DoubleSide mesh, which could only ever
-// show the outgoing image mirrored on the back, never the real incoming
-// page unmirrored.
+// past vertical) — rather than one DoubleSide mesh sharing a single
+// texture slot, which could only ever show the outgoing image mirrored on
+// the back, never the real incoming page unmirrored. Which one is visible
+// is driven explicitly by progress crossing the midpoint (not by
+// FrontSide/BackSide culling — see FlipFace) so the swap always happens
+// as one clean cut for the whole leaf, never a partial reveal.
 function FlipPage({
   direction,
   outgoingSrc,
@@ -191,16 +244,41 @@ function FlipPage({
   onComplete: (newSpread: number) => void;
 }) {
   const pivotRef = useRef<THREE.Group>(null);
+  const frontRef = useRef<THREE.Group>(null);
+  const backRef = useRef<THREE.Group>(null);
   const progressRef = useRef(0);
+  const angleRef = useRef(0);
   const firedRef = useRef(false);
   const meshOffsetX = direction === 'next' ? BOOK_HALF_WIDTH / 2 : -BOOK_HALF_WIDTH / 2;
+
+  // Set only once, imperatively, on mount — deliberately not a `visible`
+  // prop in the JSX below. A declarative `visible={false}` there would get
+  // reapplied by React every time FlipPage re-renders (e.g. if anything
+  // above it in the tree re-renders for an unrelated reason — plain
+  // function components re-render their children whenever the parent
+  // does, regardless of whether props actually changed), stomping the
+  // useFrame loop's `visible = true` the instant progress crosses the
+  // midpoint. That snaps both faces invisible for a frame and exposes
+  // whatever static page sits underneath (the old sketch flashing through
+  // mid-turn) until the very next tick corrects it. Keeping visibility
+  // purely imperative — touched only here and in useFrame below — means no
+  // re-render, however it's triggered, can ever clobber it.
+  useLayoutEffect(() => {
+    if (frontRef.current) frontRef.current.visible = true;
+    if (backRef.current) backRef.current.visible = false;
+  }, []);
 
   useFrame((_, delta) => {
     if (firedRef.current) return;
     progressRef.current = Math.min(1, progressRef.current + delta / FLIP_DURATION);
     const p = progressRef.current;
     const angle = (direction === 'next' ? 1 : -1) * Math.PI * easeInOutQuad(p);
+    angleRef.current = angle;
     if (pivotRef.current) pivotRef.current.rotation.z = angle;
+
+    const showingIncoming = p >= 0.5;
+    if (frontRef.current) frontRef.current.visible = !showingIncoming;
+    if (backRef.current) backRef.current.visible = showingIncoming;
 
     if (p >= 1) {
       // r3f's render loop can tick again before React commits the store
@@ -215,16 +293,20 @@ function FlipPage({
   return (
     <group ref={pivotRef} position={[0, TOP_Y + PAGE_THICKNESS + 0.004, 0]}>
       <group position={[meshOffsetX, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        {outgoingSrc ? (
-          <FlipFace src={outgoingSrc} side={THREE.FrontSide} progressRef={progressRef} />
-        ) : (
-          <FlipFaceBlank side={THREE.FrontSide} progressRef={progressRef} />
-        )}
-        {incomingSrc ? (
-          <FlipFace src={incomingSrc} side={THREE.BackSide} progressRef={progressRef} />
-        ) : (
-          <FlipFaceBlank side={THREE.BackSide} progressRef={progressRef} />
-        )}
+        <group ref={frontRef}>
+          {outgoingSrc ? (
+            <FlipFace src={outgoingSrc} flipUV={false} progressRef={progressRef} angleRef={angleRef} />
+          ) : (
+            <FlipFaceBlank flipUV={false} progressRef={progressRef} angleRef={angleRef} />
+          )}
+        </group>
+        <group ref={backRef}>
+          {incomingSrc ? (
+            <FlipFace src={incomingSrc} flipUV={true} progressRef={progressRef} angleRef={angleRef} />
+          ) : (
+            <FlipFaceBlank flipUV={true} progressRef={progressRef} angleRef={angleRef} />
+          )}
+        </group>
       </group>
     </group>
   );
@@ -286,6 +368,11 @@ export default function Podium() {
   const spreads = getSpreads();
   const currentSpread = useSceneStore((s) => s.currentSpread);
   const flipDirection = useSceneStore((s) => s.flipDirection);
+  // Stable action reference (zustand actions never change identity) rather
+  // than an inline arrow — an inline closure would be a fresh prop every
+  // time Podium re-renders, which would re-render FlipPage too, undoing
+  // the point of driving its visibility purely imperatively.
+  const completePageFlip = useSceneStore((s) => s.completePageFlip);
   const spread = spreads[Math.min(currentSpread, spreads.length - 1)];
   const targetIndex =
     flipDirection === 'next' ? currentSpread + 1 : flipDirection === 'prev' ? currentSpread - 1 : null;
@@ -376,7 +463,7 @@ export default function Podium() {
           direction={flipDirection}
           outgoingSrc={outgoingSrc}
           incomingSrc={incomingSrc}
-          onComplete={(newSpread) => useSceneStore.getState().completePageFlip(newSpread)}
+          onComplete={completePageFlip}
         />
       )}
 
